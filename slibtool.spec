@@ -3,8 +3,18 @@
 
 Name: slibtool
 Version: 0.5.35
-Release: %{?snapshot:0.%{snapshot}.}1
+Release: %{?snapshot:0.%{snapshot}.}2
 Source0: https://github.com/midipix-project/slibtool/archive/refs/heads/main.tar.gz
+# FIXME this is nasty
+# https://dev.midipix.org/cross/slibtool/issue/51
+# slibtool gets confused about libtool --target vs.
+# clang -target.
+# Since in an OMV context, clang -target is commonly
+# used (crosscompiling anything) and libtool --target
+# isn't used (configure doesn't generate such calls
+# even when crosscompiling), we "fix" it by just
+# disabling libtool --target.
+Patch0: slibtool-crosscompile.patch
 Summary: Drop-in replacement for libtool
 URL: https://github.com/midipix-project/slibtool
 License: Custom BSD-like

@@ -1,0 +1,12 @@
+diff -up slibtool-main/src/skin/slbt_skin_default.c.omv~ slibtool-main/src/skin/slbt_skin_default.c
+--- slibtool-main/src/skin/slbt_skin_default.c.omv~	2024-01-11 16:15:26.541273259 +0100
++++ slibtool-main/src/skin/slbt_skin_default.c	2024-01-11 16:15:54.117557823 +0100
+@@ -139,7 +139,7 @@ const struct argv_option slbt_default_op
+ 	{"output",		'o',TAG_OUTPUT,ARGV_OPTARG_REQUIRED,0,0,"<file>",
+ 				"write output to %s"},
+ 
+-	{"target",		0,TAG_TARGET,ARGV_OPTARG_REQUIRED,0,0,"<target>",
++	{"lttarget",		0,TAG_TARGET,ARGV_OPTARG_REQUIRED,0,0,"<target>",
+ 				"set an explicit (cross-)target, then pass it to "
+ 				"the compiler"},
+ 
