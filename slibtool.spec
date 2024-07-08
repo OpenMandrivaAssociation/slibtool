@@ -1,20 +1,10 @@
-%define snapshot 20240111
+#define snapshot 20240111
 %undefine _debugsource_packages
 
 Name: slibtool
-Version: 0.5.35
-Release: %{?snapshot:0.%{snapshot}.}2
-Source0: https://github.com/midipix-project/slibtool/archive/refs/heads/main.tar.gz
-# FIXME this is nasty
-# https://dev.midipix.org/cross/slibtool/issue/51
-# slibtool gets confused about libtool --target vs.
-# clang -target.
-# Since in an OMV context, clang -target is commonly
-# used (crosscompiling anything) and libtool --target
-# isn't used (configure doesn't generate such calls
-# even when crosscompiling), we "fix" it by just
-# disabling libtool --target.
-Patch0: slibtool-crosscompile.patch
+Version: 0.6.0
+Release: %{?snapshot:0.%{snapshot}.}1
+Source0: https://github.com/midipix-project/slibtool/archive/refs/%{?snapshot:heads/main}%{!?snapshot:tags/v%{version}}.tar.gz
 Summary: Drop-in replacement for libtool
 URL: https://github.com/midipix-project/slibtool
 License: Custom BSD-like
@@ -37,7 +27,7 @@ number of times, and which are characterized by the short compilation duration
 of individual translation units.
 
 %prep
-%autosetup -p1 -n %{name}-main
+%autosetup -p1 -n %{name}-%{?snapshot:main}%{!?snapshot:%{version}}
 # Looks like autoconf, but isn't
 ./configure \
 %if %{cross_compiling}
@@ -52,17 +42,33 @@ of individual translation units.
 %install
 %make_install
 
+# Upstream ltmain.sh uses #!/dev/null -- weird dependency
+cat >%{buildroot}%{_datadir}/slibtool/ltmain.sh <<EOF
+#!%{_bindir}/true
+# << this script should never be invoked >>
+EOF
+chmod +x %{buildroot}%{_datadir}/slibtool/ltmain.sh
+
 %files
 %{_bindir}/clibtool
+%{_bindir}/clibtool-ar
 %{_bindir}/clibtool-shared
 %{_bindir}/clibtool-static
 %{_bindir}/dlibtool
+%{_bindir}/dlibtool-ar
 %{_bindir}/dlibtool-shared
 %{_bindir}/dlibtool-static
+%{_bindir}/dclibtool
+%{_bindir}/dclibtool-ar
+%{_bindir}/dclibtool-shared
+%{_bindir}/dclibtool-static
 %{_bindir}/rclibtool
 %{_bindir}/rdclibtool
 %{_bindir}/rdlibtool
 %{_bindir}/rlibtool
 %{_bindir}/slibtool
+%{_bindir}/slibtool-ar
 %{_bindir}/slibtool-shared
 %{_bindir}/slibtool-static
+%{_bindir}/slibtoolize
+%{_datadir}/slibtool
