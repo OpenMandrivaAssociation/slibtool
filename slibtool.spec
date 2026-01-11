@@ -11,6 +11,7 @@ URL: https://git.foss21.org/cross/slibtool
 License: Custom BSD-like
 Group: Development/Tools
 BuildRequires: m4
+BuildRequires: make
 
 %description
 `slibtool` is an independent reimplementation of the widely used libtool,
