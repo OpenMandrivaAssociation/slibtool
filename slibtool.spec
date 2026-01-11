@@ -2,11 +2,12 @@
 %undefine _debugsource_packages
 
 Name: slibtool
-Version: 0.6.1
+Version: 0.7.4
 Release: %{?snapshot:0.%{snapshot}.}1
-Source0: https://github.com/midipix-project/slibtool/archive/refs/%{?snapshot:heads/main}%{!?snapshot:tags/v%{version}}.tar.gz
+Source0: https://dl.foss21.org/slibtool/slibtool-%{version}.tar.xz
 Summary: Drop-in replacement for libtool
-URL: https://github.com/midipix-project/slibtool
+URL: https://git.foss21.org/cross/slibtool
+# Used to be https://github.com/midipix-project/slibtool
 License: Custom BSD-like
 Group: Development/Tools
 
@@ -34,7 +35,8 @@ of individual translation units.
 	--target=%{_target_platform} \
 %endif
 	--prefix=%{_prefix} \
-	--libdir=%{_libdir}
+	--libdir=%{_libdir} \
+	--enable-app --enable-frontend
 
 %build
 %make_build
