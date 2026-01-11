@@ -10,6 +10,7 @@ URL: https://git.foss21.org/cross/slibtool
 # Used to be https://github.com/midipix-project/slibtool
 License: Custom BSD-like
 Group: Development/Tools
+BuildRequires: m4
 
 %description
 `slibtool` is an independent reimplementation of the widely used libtool,
