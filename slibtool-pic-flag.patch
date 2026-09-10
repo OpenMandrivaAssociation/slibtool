@@ -1,6 +1,6 @@
 diff -Naur a/include/slibtool/slibtool.h b/include/slibtool/slibtool.h
---- a/include/slibtool/slibtool.h	2026-09-09 22:35:36.470242452 +0200
-+++ b/include/slibtool/slibtool.h	2026-09-09 22:35:36.471192564 +0200
+--- a/include/slibtool/slibtool.h	2026-09-10 05:26:31.144811810 +0200
++++ b/include/slibtool/slibtool.h	2026-09-10 05:26:31.147833940 +0200
 @@ -358,6 +358,7 @@
  	const char *			expsyms;
  	const char *			regex;
@@ -10,8 +10,8 @@ diff -Naur a/include/slibtool/slibtool.h b/include/slibtool/slibtool.h
  
  struct slbt_driver_ctx {
 diff -Naur a/m4/slibtool.m4 b/m4/slibtool.m4
---- a/m4/slibtool.m4	2026-09-09 22:35:36.511522396 +0200
-+++ b/m4/slibtool.m4	2026-09-09 22:35:36.512472759 +0200
+--- a/m4/slibtool.m4	2026-09-10 05:26:31.188812305 +0200
++++ b/m4/slibtool.m4	2026-09-10 05:26:31.191914662 +0200
 @@ -630,7 +630,21 @@
  		[_slibtool="${SLIBTOOL:-slibtool}";]
  		[${_slibtool%% *} --mkvars=Makefile --config \
@@ -36,8 +36,8 @@ diff -Naur a/m4/slibtool.m4 b/m4/slibtool.m4
  # optionally create libtool as a symlink to slibtool.sh
  AC_CONFIG_COMMANDS_PRE(
 diff -Naur a/src/driver/slbt_driver_ctx.c b/src/driver/slbt_driver_ctx.c
---- a/src/driver/slbt_driver_ctx.c	2026-09-09 22:35:36.499909526 +0200
-+++ b/src/driver/slbt_driver_ctx.c	2026-09-09 22:35:36.500846418 +0200
+--- a/src/driver/slbt_driver_ctx.c	2026-09-10 05:26:31.179771871 +0200
++++ b/src/driver/slbt_driver_ctx.c	2026-09-10 05:26:31.181131777 +0200
 @@ -1212,6 +1212,12 @@
  	if (ictx->ctx.libname)
  		free(ictx->ctx.libname);
@@ -52,8 +52,8 @@ diff -Naur a/src/driver/slbt_driver_ctx.c b/src/driver/slbt_driver_ctx.c
  		free(ictx->ctx.dlopenv);
  
 diff -Naur a/src/internal/slibtool_driver_impl.h b/src/internal/slibtool_driver_impl.h
---- a/src/internal/slibtool_driver_impl.h	2026-09-09 22:35:36.476126408 +0200
-+++ b/src/internal/slibtool_driver_impl.h	2026-09-09 22:35:36.477132371 +0200
+--- a/src/internal/slibtool_driver_impl.h	2026-09-10 05:26:31.152225861 +0200
++++ b/src/internal/slibtool_driver_impl.h	2026-09-10 05:26:31.153514286 +0200
 @@ -19,6 +19,7 @@
  #include "argv/argv.h"
  
@@ -81,8 +81,8 @@ diff -Naur a/src/internal/slibtool_driver_impl.h b/src/internal/slibtool_driver_
  
  struct slbt_archive_ctx_impl {
 diff -Naur a/src/internal/slibtool_lconf_impl.c b/src/internal/slibtool_lconf_impl.c
---- a/src/internal/slibtool_lconf_impl.c	2026-09-09 22:35:36.482467060 +0200
-+++ b/src/internal/slibtool_lconf_impl.c	2026-09-09 22:35:36.483460613 +0200
+--- a/src/internal/slibtool_lconf_impl.c	2026-09-10 05:26:31.157888947 +0200
++++ b/src/internal/slibtool_lconf_impl.c	2026-09-10 05:26:31.159300644 +0200
 @@ -8,6 +8,8 @@
  #include <fcntl.h>
  #include <stdio.h>
@@ -380,8 +380,8 @@ diff -Naur a/src/internal/slibtool_lconf_impl.c b/src/internal/slibtool_lconf_im
  	ctx->lconf.addr = addr;
  	ctx->lconf.size = st.st_size;
 diff -Naur a/src/logic/slbt_exec_compile.c b/src/logic/slbt_exec_compile.c
---- a/src/logic/slbt_exec_compile.c	2026-09-09 22:35:36.494301733 +0200
-+++ b/src/logic/slbt_exec_compile.c	2026-09-09 22:35:36.495189555 +0200
+--- a/src/logic/slbt_exec_compile.c	2026-09-10 05:26:31.169095257 +0200
++++ b/src/logic/slbt_exec_compile.c	2026-09-10 05:26:31.170137540 +0200
 @@ -11,6 +11,7 @@
  #include <sys/stat.h>
  
@@ -430,8 +430,8 @@ diff -Naur a/src/logic/slbt_exec_compile.c b/src/logic/slbt_exec_compile.c
  
  		*ectx->lout[0] = "-o";
 diff -Naur a/src/logic/slbt_exec_ctx.c b/src/logic/slbt_exec_ctx.c
---- a/src/logic/slbt_exec_ctx.c	2026-09-09 22:35:36.488219825 +0200
-+++ b/src/logic/slbt_exec_ctx.c	2026-09-09 22:35:36.489265178 +0200
+--- a/src/logic/slbt_exec_ctx.c	2026-09-10 05:26:31.163657944 +0200
++++ b/src/logic/slbt_exec_ctx.c	2026-09-10 05:26:31.165062680 +0200
 @@ -17,7 +17,7 @@
  #include "slibtool_ar_impl.h"
  
@@ -479,9 +479,32 @@ diff -Naur a/src/logic/slbt_exec_ctx.c b/src/logic/slbt_exec_ctx.c
  	*ectx->cass = 0;
  
  	*ectx->noundef = 0;
+diff -Naur a/src/logic/slbt_exec_link.c b/src/logic/slbt_exec_link.c
+--- a/src/logic/slbt_exec_link.c	2026-09-10 05:26:31.172812124 +0200
++++ b/src/logic/slbt_exec_link.c	2026-09-10 05:26:31.175310369 +0200
+@@ -253,12 +253,17 @@
+ 			return SLBT_NESTED_ERROR(dctx);
+ 	}
+ 
+-	/* pic libfoo.a */
++	/* Static archive for a .la:
++	 * - convenience library (no rpath / no DSO): PIC members, so
++	 *   --whole-archive into a shared library works.
++	 * - installed library that also has a DSO: non-PIC members,
++	 *   matching GNU libtool. PIC members can carry .symver
++	 *   aliases that break -static-libstdc++ into another DSO. */
+ 	if (dot && !strcmp(dot,".la") && !fnoarchive) {
+ 		if (slbt_exec_link_create_archive(
+ 				dctx,ectx,
+ 				ectx->arfilename,
+-				fpic,true)) {
++				fpic && fnodsolib,true)) {
+ 			slbt_ectx_free_exec_ctx(ectx);
+ 			return SLBT_NESTED_ERROR(dctx);
+ 		}
 diff -Naur a/src/output/slbt_output_config.c b/src/output/slbt_output_config.c
---- a/src/output/slbt_output_config.c	2026-09-09 22:35:36.505654490 +0200
-+++ b/src/output/slbt_output_config.c	2026-09-09 22:35:36.506660693 +0200
+--- a/src/output/slbt_output_config.c	2026-09-10 05:26:31.185034022 +0200
++++ b/src/output/slbt_output_config.c	2026-09-10 05:26:31.186304967 +0200
 @@ -175,6 +175,14 @@
  			cctx->host.windres[0] ? "\"" : "") < 0)
  		return SLBT_SYSTEM_ERROR(dctx,0);

@@ -3,7 +3,7 @@
 
 Name: slibtool
 Version: 0.7.4
-Release: %{?snapshot:0.%{snapshot}.}2
+Release: %{?snapshot:0.%{snapshot}.}3
 Source0: https://dl.foss21.org/slibtool/slibtool-%{version}.tar.xz
 Summary: Drop-in replacement for libtool
 URL: https://git.foss21.org/cross/slibtool
