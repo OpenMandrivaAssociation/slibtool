@@ -1,0 +1,499 @@
+diff -Naur a/include/slibtool/slibtool.h b/include/slibtool/slibtool.h
+--- a/include/slibtool/slibtool.h	2026-09-09 22:35:36.470242452 +0200
++++ b/include/slibtool/slibtool.h	2026-09-09 22:35:36.471192564 +0200
+@@ -358,6 +358,7 @@
+ 	const char *			expsyms;
+ 	const char *			regex;
+ 	const char *			user;
++	const char *			pic_flag;
+ };
+ 
+ struct slbt_driver_ctx {
+diff -Naur a/m4/slibtool.m4 b/m4/slibtool.m4
+--- a/m4/slibtool.m4	2026-09-09 22:35:36.511522396 +0200
++++ b/m4/slibtool.m4	2026-09-09 22:35:36.512472759 +0200
+@@ -630,7 +630,21 @@
+ 		[_slibtool="${SLIBTOOL:-slibtool}";]
+ 		[${_slibtool%% *} --mkvars=Makefile --config \
+ 			${slibtool_prefer_sltdl_switch:-}     \
+-			> slibtool.cfg]))
++			> slibtool.cfg
++		# Honor GNU libtool pic_flag overrides set by the project
++		# before AC_OUTPUT (lt_prog_compiler_pic / _CXX / ...).
++		if test x"${lt_prog_compiler_pic+set}" = xset; then
++			printf 'pic_flag="%s"\n' "$lt_prog_compiler_pic" >> slibtool.cfg
++		fi
++		if test x"${lt_prog_compiler_pic_CXX+set}" = xset; then
++			printf 'pic_flag_CXX="%s"\n' "$lt_prog_compiler_pic_CXX" >> slibtool.cfg
++		fi
++		if test x"${lt_prog_compiler_pic_FC+set}" = xset; then
++			printf 'pic_flag_FC="%s"\n' "$lt_prog_compiler_pic_FC" >> slibtool.cfg
++		fi
++		if test x"${lt_prog_compiler_pic_F77+set}" = xset; then
++			printf 'pic_flag_F77="%s"\n' "$lt_prog_compiler_pic_F77" >> slibtool.cfg
++		fi]))
+ 
+ # optionally create libtool as a symlink to slibtool.sh
+ AC_CONFIG_COMMANDS_PRE(
+diff -Naur a/src/driver/slbt_driver_ctx.c b/src/driver/slbt_driver_ctx.c
+--- a/src/driver/slbt_driver_ctx.c	2026-09-09 22:35:36.499909526 +0200
++++ b/src/driver/slbt_driver_ctx.c	2026-09-09 22:35:36.500846418 +0200
+@@ -1212,6 +1212,12 @@
+ 	if (ictx->ctx.libname)
+ 		free(ictx->ctx.libname);
+ 
++	if (ictx->ctx.pic_flag)
++		free(ictx->ctx.pic_flag);
++
++	if (ictx->ctx.pic_flag_tok)
++		free(ictx->ctx.pic_flag_tok);
++
+ 	if (ictx->ctx.dlopenv)
+ 		free(ictx->ctx.dlopenv);
+ 
+diff -Naur a/src/internal/slibtool_driver_impl.h b/src/internal/slibtool_driver_impl.h
+--- a/src/internal/slibtool_driver_impl.h	2026-09-09 22:35:36.476126408 +0200
++++ b/src/internal/slibtool_driver_impl.h	2026-09-09 22:35:36.477132371 +0200
+@@ -19,6 +19,7 @@
+ #include "argv/argv.h"
+ 
+ #define SLBT_OPTV_ELEMENTS 128
++#define SLBT_PICX_MAX 8
+ 
+ #define SLBT_DRIVER_OUTPUT_MASK (SLBT_DRIVER_OUTPUT_M4_DIR    \
+ 				| SLBT_DRIVER_OUTPUT_AUX_DIR   \
+@@ -184,6 +185,9 @@
+ 
+ 	const char *                    ltdlarg;
+ 	char *                          libname;
++	char *                          pic_flag;
++	char *                          pic_flag_tok;
++	char *                          picx[8];
+ 	char *                          dargs;
+ 	char **                         dargv;
+ 	char **                         targv;
+@@ -220,6 +224,7 @@
+ 	char **                         lout[2];
+ 	char **                         mout[2];
+ 	char **                         vbuffer;
++	char **                         picx[8];
+ };
+ 
+ struct slbt_archive_ctx_impl {
+diff -Naur a/src/internal/slibtool_lconf_impl.c b/src/internal/slibtool_lconf_impl.c
+--- a/src/internal/slibtool_lconf_impl.c	2026-09-09 22:35:36.482467060 +0200
++++ b/src/internal/slibtool_lconf_impl.c	2026-09-09 22:35:36.483460613 +0200
+@@ -8,6 +8,8 @@
+ #include <fcntl.h>
+ #include <stdio.h>
+ #include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
+ #include <stdbool.h>
+ #include <unistd.h>
+ #include <sys/mman.h>
+@@ -753,6 +755,234 @@
+ 	return 0;
+ }
+ 
++static const char * slbt_lconf_tag_name(enum slbt_tag tag)
++{
++	switch (tag) {
++		case SLBT_TAG_CXX:
++			return "CXX";
++		case SLBT_TAG_FC:
++			return "FC";
++		case SLBT_TAG_F77:
++			return "F77";
++		case SLBT_TAG_RC:
++			return "RC";
++		default:
++			return 0;
++	}
++}
++
++static int slbt_lconf_unquote(
++	const char *	src,
++	char		(*val)[PATH_MAX])
++{
++	const char *	mark;
++	const char *	cap;
++	char		quote;
++
++	while (*src == ' ' || *src == '\t')
++		src++;
++
++	quote = 0;
++	if (*src == '"' || *src == '\'') {
++		quote = *src++;
++		mark  = src;
++		for (cap = mark; *cap && *cap != quote; )
++			cap++;
++		if (*cap != quote)
++			return -1;
++	} else {
++		mark = src;
++		for (cap = mark; *cap && *cap != '\r' && *cap != '\n'; )
++			cap++;
++	}
++
++	if ((size_t)(cap - mark) >= sizeof(*val))
++		return -1;
++
++	memcpy(*val, mark, (size_t)(cap - mark));
++	(*val)[cap - mark] = '\0';
++	return 0;
++}
++
++static int slbt_lconf_key_value(
++	const char *	line,
++	const char *	key,
++	char		(*val)[PATH_MAX])
++{
++	const char *	mark;
++	size_t		klen;
++
++	klen = strlen(key);
++
++	/* key=value */
++	if (!strncmp(line, key, klen) && line[klen] == '=')
++		return slbt_lconf_unquote(&line[klen + 1], val);
++
++	/* config.status: S["key"]="value" */
++	if (!strncmp(line, "S[\"", 3)) {
++		mark = &line[3];
++		if (!strncmp(mark, key, klen)
++				&& !strncmp(&mark[klen], "\"]=", 3))
++			return slbt_lconf_unquote(&mark[klen + 3], val);
++	}
++
++	return 1;
++}
++
++static int slbt_lconf_section_tag(
++	const char *	line,
++	char		(*tag)[16])
++{
++	const char *	mark;
++	const char *	cap;
++	const char	pfx[] = "BEGIN LIBTOOL TAG CONFIG:";
++	size_t		n;
++
++	if (!(mark = strstr(line, pfx)))
++		return 1;
++
++	mark += sizeof(pfx) - 1;
++	while (*mark == ' ' || *mark == '\t')
++		mark++;
++
++	for (cap = mark; *cap && *cap != '\r' && *cap != '\n' && *cap != ' '; )
++		cap++;
++
++	n = (size_t)(cap - mark);
++	if (!n || n >= sizeof(*tag))
++		return 1;
++
++	memcpy(*tag, mark, n);
++	(*tag)[n] = '\0';
++	return 0;
++}
++
++static int slbt_get_lconf_pic_flag(
++	const struct slbt_txtfile_ctx *	tctx,
++	enum slbt_tag			tag,
++	char				(*val)[PATH_MAX])
++{
++	const char **	pline;
++	const char *	want;
++	const char *	line;
++	char		section[16];
++	char		tagged[64];
++	char		found_default[PATH_MAX];
++	char		found_tag[PATH_MAX];
++	char		tmp[PATH_MAX];
++	int		ret;
++
++	want = slbt_lconf_tag_name(tag);
++	section[0] = '\0';
++	found_default[0] = '\0';
++	found_tag[0] = '\0';
++	(*val)[0] = '\0';
++
++	if (want)
++		sprintf(tagged, "pic_flag_%s", want);
++	else
++		tagged[0] = '\0';
++
++	for (pline = tctx->txtlinev; *pline; pline++) {
++		line = *pline;
++
++		if (strstr(line, "BEGIN LIBTOOL CONFIG")
++				&& !strstr(line, "TAG CONFIG")) {
++			section[0] = '\0';
++			continue;
++		}
++
++		if (!slbt_lconf_section_tag(line, &section))
++			continue;
++
++		ret = slbt_lconf_key_value(line, "pic_flag", &tmp);
++		if (!ret) {
++			if (section[0] && want && !strcmp(section, want))
++				strcpy(found_tag, tmp);
++			else if (!section[0] && !found_default[0])
++				strcpy(found_default, tmp);
++			continue;
++		}
++
++		if (tagged[0] && !slbt_lconf_key_value(line, tagged, &tmp)) {
++			strcpy(found_tag, tmp);
++			continue;
++		}
++
++		if (want) {
++			sprintf(tagged, "lt_prog_compiler_pic_%s", want);
++			if (!slbt_lconf_key_value(line, tagged, &tmp)) {
++				strcpy(found_tag, tmp);
++				sprintf(tagged, "pic_flag_%s", want);
++				continue;
++			}
++			sprintf(tagged, "pic_flag_%s", want);
++		}
++
++		if (!slbt_lconf_key_value(line, "lt_prog_compiler_pic", &tmp)
++				&& !found_default[0])
++			strcpy(found_default, tmp);
++	}
++
++	if (found_tag[0])
++		strcpy(*val, found_tag);
++	else
++		strcpy(*val, found_default);
++
++	return 0;
++}
++
++static void slbt_lconf_store_pic_flag(
++	struct slbt_driver_ctx_impl *	ctx,
++	char				(*val)[PATH_MAX])
++{
++	char *	ch;
++	char *	tok;
++	int	px;
++	int	skip;
++
++	ctx->pic_flag = 0;
++	ctx->pic_flag_tok = 0;
++	memset(ctx->picx, 0, sizeof(ctx->picx));
++	ctx->cctx.pic_flag = 0;
++
++	if (!(*val)[0])
++		return;
++
++	if (!(ctx->pic_flag = strdup(*val)))
++		return;
++
++	if (!(ctx->pic_flag_tok = strdup(*val)))
++		return;
++
++	ctx->cctx.pic_flag = ctx->pic_flag;
++
++	/* Keep tokens that GNU libtool would add beyond -fPIC/-DPIC */
++	px = 0;
++	for (ch = ctx->pic_flag_tok; *ch; ) {
++		while (*ch == ' ' || *ch == '\t')
++			ch++;
++		if (!*ch)
++			break;
++
++		tok = ch;
++		while (*ch && *ch != ' ' && *ch != '\t')
++			ch++;
++		if (*ch)
++			*ch++ = '\0';
++
++		skip = !strcmp(tok, "-fPIC")
++			|| !strcmp(tok, "-fpic")
++			|| !strcmp(tok, "-fPIE")
++			|| !strcmp(tok, "-fpie")
++			|| !strcmp(tok, "-DPIC")
++			|| !strcmp(tok, "-DPIE");
++
++		if (!skip && px < SLBT_PICX_MAX)
++			ctx->picx[px++] = tok;
++	}
++}
++
+ slbt_hidden int slbt_get_lconf_flags(
+ 	struct slbt_driver_ctx *	dctx,
+ 	const char *			lconf,
+@@ -768,6 +998,8 @@
+ 	uint64_t			optstatic;
+ 	uint64_t			optsltdl;
+ 	char                            val[PATH_MAX];
++	char                            lconfpath[PATH_MAX];
++	char                            picval[PATH_MAX];
+ 
+ 	/* driver context (ar, ranlib, cc) */
+ 	ctx = slbt_get_driver_ictx(dctx);
+@@ -777,6 +1009,8 @@
+ 		return (dctx->cctx->drvflags & SLBT_DRIVER_OUTPUT_MASK)
+ 			? (-1) : SLBT_NESTED_ERROR(dctx);
+ 
++	strcpy(lconfpath,val);
++
+ 	/* cache the configuration in library friendly form) */
+ 	if (slbt_lib_get_txtfile_ctx(dctx,val,&ctx->lconfctx) < 0)
+ 		return SLBT_NESTED_ERROR(dctx);
+@@ -925,6 +1159,33 @@
+ 	}
+ 
+ 
++	/* GNU libtool pic_flag / lt_prog_compiler_pic[_TAG] */
++	if (slbt_get_lconf_pic_flag(confctx,ctx->cctx.tag,&picval) < 0)
++		return SLBT_CUSTOM_ERROR(
++			dctx,SLBT_ERR_LCONF_PARSE);
++
++	if (!picval[0] && lconfpath[0]) {
++		struct slbt_txtfile_ctx *	csctx;
++		char				cspath[PATH_MAX];
++		char *				slash;
++
++		strcpy(cspath,lconfpath);
++		if ((slash = strrchr(cspath,'/')))
++			strcpy(slash + 1,"config.status");
++		else
++			strcpy(cspath,"config.status");
++
++		if (!faccessat(AT_FDCWD,cspath,R_OK,0)
++				&& !slbt_lib_get_txtfile_ctx(dctx,cspath,&csctx)) {
++			if (slbt_get_lconf_pic_flag(
++					csctx,ctx->cctx.tag,&picval) < 0)
++				picval[0] = '\0';
++			slbt_lib_free_txtfile_ctx(csctx);
++		}
++	}
++
++	slbt_lconf_store_pic_flag(ctx,&picval);
++
+ 	/* all done */
+ 	ctx->lconf.addr = addr;
+ 	ctx->lconf.size = st.st_size;
+diff -Naur a/src/logic/slbt_exec_compile.c b/src/logic/slbt_exec_compile.c
+--- a/src/logic/slbt_exec_compile.c	2026-09-09 22:35:36.494301733 +0200
++++ b/src/logic/slbt_exec_compile.c	2026-09-09 22:35:36.495189555 +0200
+@@ -11,6 +11,7 @@
+ #include <sys/stat.h>
+ 
+ #include <slibtool/slibtool.h>
++#include "slibtool_driver_impl.h"
+ #include "slibtool_spawn_impl.h"
+ #include "slibtool_mkdir_impl.h"
+ #include "slibtool_errinfo_impl.h"
+@@ -227,8 +228,19 @@
+ 	/* shared library object */
+ 	if (fshared) {
+ 		if (!(cctx->drvflags & SLBT_DRIVER_ANTI_PIC)) {
++			struct slbt_exec_ctx_impl * ictx;
++			struct slbt_driver_ctx_impl * idctx;
++			int px;
++
++			ictx  = slbt_get_exec_ictx(ectx);
++			idctx = slbt_get_driver_ictx(dctx);
++
+ 			*ectx->dpic = "-DPIC";
+ 			*ectx->fpic = fpic;
++
++			/* Extra tokens from GNU libtool pic_flag / lt_prog_compiler_pic */
++			for (px = 0; px < SLBT_PICX_MAX && idctx->picx[px]; px++)
++				*ictx->picx[px] = idctx->picx[px];
+ 		}
+ 
+ 		*ectx->lout[0] = "-o";
+@@ -262,8 +274,18 @@
+ 		slbt_reset_placeholders(ectx);
+ 
+ 		if (cctx->drvflags & SLBT_DRIVER_PRO_PIC) {
++			struct slbt_exec_ctx_impl * ictx;
++			struct slbt_driver_ctx_impl * idctx;
++			int px;
++
++			ictx  = slbt_get_exec_ictx(ectx);
++			idctx = slbt_get_driver_ictx(dctx);
++
+ 			*ectx->dpic = "-DPIC";
+ 			*ectx->fpic = fpic;
++
++			for (px = 0; px < SLBT_PICX_MAX && idctx->picx[px]; px++)
++				*ictx->picx[px] = idctx->picx[px];
+ 		}
+ 
+ 		*ectx->lout[0] = "-o";
+diff -Naur a/src/logic/slbt_exec_ctx.c b/src/logic/slbt_exec_ctx.c
+--- a/src/logic/slbt_exec_ctx.c	2026-09-09 22:35:36.488219825 +0200
++++ b/src/logic/slbt_exec_ctx.c	2026-09-09 22:35:36.489265178 +0200
+@@ -17,7 +17,7 @@
+ #include "slibtool_ar_impl.h"
+ 
+ #define SLBT_ECTX_LIB_EXTRAS	26
+-#define SLBT_ECTX_SPARE_PTRS	16
++#define SLBT_ECTX_SPARE_PTRS	24
+ 
+ static int slbt_ectx_free_exec_ctx_impl(
+ 	struct slbt_exec_ctx_impl *	ictx,
+@@ -328,9 +328,11 @@
+ 		}
+ 	}
+ 
+-	/* placeholders for -DPIC, -fPIC, -c, -o, <output> */
++	/* placeholders for -DPIC, extra pic_flag tokens, -fPIC, -c, -o */
+ 	ictx->ctx.dpic = &ictx->ctx.argv[i++];
+ 	ictx->ctx.fpic = &ictx->ctx.argv[i++];
++	for (int px = 0; px < SLBT_PICX_MAX; px++)
++		ictx->picx[px] = &ictx->ctx.argv[i++];
+ 	ictx->ctx.cass = &ictx->ctx.argv[i++];
+ 
+ 	ictx->ctx.noundef = &ictx->ctx.argv[i++];
+@@ -847,6 +849,8 @@
+ 
+ 	*ectx->dpic = "-USLIBTOOL_PLACEHOLDER_DPIC";
+ 	*ectx->fpic = "-USLIBTOOL_PLACEHOLDER_FPIC";
++	for (int px = 0; px < SLBT_PICX_MAX; px++)
++		*ictx->picx[px] = "-USLIBTOOL_PLACEHOLDER_PICX";
+ 	*ectx->cass = "-USLIBTOOL_PLACEHOLDER_COMPILE_ASSEMBLE";
+ 
+ 	*ectx->noundef = "-USLIBTOOL_PLACEHOLDER_NO_UNDEFINED";
+@@ -871,8 +875,15 @@
+ 
+ slbt_hidden void slbt_disable_placeholders(struct slbt_exec_ctx * ectx)
+ {
++	struct slbt_exec_ctx_impl * ictx;
++	int px;
++
++	ictx = slbt_get_exec_ictx(ectx);
++
+ 	*ectx->dpic = 0;
+ 	*ectx->fpic = 0;
++	for (px = 0; px < SLBT_PICX_MAX; px++)
++		*ictx->picx[px] = 0;
+ 	*ectx->cass = 0;
+ 
+ 	*ectx->noundef = 0;
+diff -Naur a/src/output/slbt_output_config.c b/src/output/slbt_output_config.c
+--- a/src/output/slbt_output_config.c	2026-09-09 22:35:36.505654490 +0200
++++ b/src/output/slbt_output_config.c	2026-09-09 22:35:36.506660693 +0200
+@@ -175,6 +175,14 @@
+ 			cctx->host.windres[0] ? "\"" : "") < 0)
+ 		return SLBT_SYSTEM_ERROR(dctx,0);
+ 
++	if (cctx->pic_flag) {
++		if (slbt_dprintf(fdout,
++				"# compiler PIC flags (GNU libtool pic_flag)\n"
++				"pic_flag=\"%s\"\n\n",
++				cctx->pic_flag) < 0)
++			return SLBT_SYSTEM_ERROR(dctx,0);
++	}
++
+ 	if (slbt_dprintf(fdout,"%s%s%s\n",lconf_end,lconf_guard,lconf_guard) < 0)
+ 		return SLBT_SYSTEM_ERROR(dctx,0);
+ 
